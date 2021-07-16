@@ -2,7 +2,8 @@ import sys
 from collections import Counter
 import pdb
 import pickle, json
-SPLIT_TOK=" ||| "
+# SPLIT_TOK=" ||| "
+SPLIT_TOK="\t"
 def main(data_file, aligner_file):
     data = None
     with open(data_file, "r") as f:
@@ -12,7 +13,7 @@ def main(data_file, aligner_file):
     with open(aligner_file, "r") as f:
         for k, line in enumerate(f):
             input, output = data[k].split(SPLIT_TOK)
-            input, output = input.strip().split(" "), output.strip().split(" ")
+            input, output, _ = input.strip().split(" "), output.strip().split(" ")
             alignments = line.strip().split(" ")
             for a in alignments:
                 if len(a) == 0: continue

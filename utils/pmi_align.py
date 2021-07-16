@@ -8,9 +8,9 @@ import torch
 import torch.nn.functional as F
 EPS=1e-7
 
-SPLIT_TOK=" ||| "
+# SPLIT_TOK=" ||| "
 
-#SPLIT_TOK="\t"
+SPLIT_TOK="\t"
 
 def main(data_file, aligner_file):
 
@@ -18,7 +18,8 @@ def main(data_file, aligner_file):
 
     with open(data_file, "r") as f:
         for line in f:
-            inpstr, outstr = line.split(SPLIT_TOK)
+            # print(line.split(SPLIT_TOK))
+            inpstr, outstr, _ = line.split(SPLIT_TOK)
             input, output = set(inpstr.strip().split(" ")), set(outstr.strip().split(" "))
             for x in input:
                 counts_x[x] = counts_x.get(x,0) + 1.0

@@ -134,7 +134,7 @@ def train(model, train_dataset, val_dataset, writer=None, references=None):
             if steps % FLAGS.accum_count == 0:
                 accum_steps += 1
                 gnorm = nn.utils.clip_grad_norm_(model.parameters(), FLAGS.gclip)
-                if not np.isfinite(gnorm):
+                if not torch.isfinite(gnorm):
                     got_nan = True
                     print("=====GOT NAN=====")
                     break

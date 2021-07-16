@@ -31,7 +31,8 @@ class Encoder(nn.Module):
         if lens is not None:
             padded_sequence = self.embed_dropout(emb)
             total_length = padded_sequence.shape[0]
-            packed_sequence = nn.utils.rnn.pack_padded_sequence(padded_sequence, lens)
+            packed_sequence = nn.utils.rnn.pack_padded_sequence(padded_sequence,
+                                                                lens.cpu())
             packed_output, hidden = self.rnn(packed_sequence)
             output_padded,_ = nn.utils.rnn.pad_packed_sequence(packed_output,
                                                                total_length=total_length,
