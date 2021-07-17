@@ -1,10 +1,10 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
-
 from .encoder import Encoder
 from .decoder import Decoder
 from .attention import SimpleAttention
+
 class EncDec(nn.Module):
     def __init__(self,
                  vocab_x,
@@ -82,7 +82,10 @@ class EncDec(nn.Module):
         return state
 
     def forward(self, inp, out, lens=None, per_instance=False):
+        # inp: length, batch_size
         hid, state = self.encoder(inp, lens=lens)
+        # hid: length, batch_size, hid_size
+        # state: 2, batch_size, hid_size
 
         state = self.pass_hiddens(state)
         out_src = out[:-1, :]
