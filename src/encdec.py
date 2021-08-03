@@ -84,10 +84,11 @@ class EncDec(nn.Module):
     def forward(self, inp, out, lens=None, per_instance=False):
         # inp: length, batch_size
         hid, state = self.encoder(inp, lens=lens)
+        # print([s.size() for s in state])
         # hid: length, batch_size, hid_size
         # state: 2, batch_size, hid_size
-
         state = self.pass_hiddens(state)
+        # print([s.size() for s in state])
         out_src = out[:-1, :]
 
         if self.source_att:

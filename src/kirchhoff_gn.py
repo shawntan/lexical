@@ -1,12 +1,12 @@
 import torch
 import torch.nn as nn
-from requests import head
 from torch.nn import init
 import torch.nn.functional as F
 import math
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
-from kirchhoff import KirchhoffNormalisation
-from transformers.models.bert import BertConfig
+
+from .kirchhoff import KirchhoffNormalisation
+from . import hinton
 
 
 class Conv1d(nn.Module):
@@ -99,7 +99,7 @@ class WeightedGNN(nn.Module):
                  dropout=0.2, dropoutm=0.1,
                  parser_dropout=0.05,
                  parser_seq_processor='rnn',
-                 prefix_attachment=True,
+                 prefix_attachment=False,
                  gumbel_noise=True):
         super(WeightedGNN, self).__init__()
 
@@ -110,7 +110,7 @@ class WeightedGNN(nn.Module):
         self.emb_sem = nn.Embedding(ntokens, input_size, padding_idx=self.padding_idx)
         self.emb_aux = nn.Embedding(ntokens, input_size, padding_idx=self.padding_idx)
 
-        self.parse = Parser(input_size, num_layers=3,
+        self.parse = Parser(input_size, num_layers=2,
                             dropout=parser_dropout,
                             parser_seq_processor=parser_seq_processor,
                             prefix_attachment=prefix_attachment,
@@ -151,9 +151,9 @@ class WeightedGNN(nn.Module):
              external_key, external_val, external_idxs, mask)
 
     def initial_processing(self, input):
-        input = input.clone()
         max_length, batch_size = input.size()
         if self.snip_start_end:
+            input = input.clone()
             input = input[1:]
             mask = (input != self.padding_idx)[1:]
             lengths = mask.sum(0)
@@ -308,6 +308,7 @@ class Parser(nn.Module):
             head_root_score=0 * root_logits_rels,
             mask=mask
         )
+        print(hinton.plot(p[0].sum(-1).detach().cpu().numpy(), max_val=1.))
         return p, p_root, h
 
 
