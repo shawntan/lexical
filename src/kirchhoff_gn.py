@@ -110,7 +110,7 @@ class WeightedGNN(nn.Module):
         self.emb_sem = nn.Embedding(ntokens, input_size, padding_idx=self.padding_idx)
         self.emb_aux = nn.Embedding(ntokens, input_size, padding_idx=self.padding_idx)
 
-        self.parse = Parser(input_size, num_layers=2,
+        self.parse = NRIParser(input_size, num_layers=2,
                             dropout=parser_dropout,
                             parser_seq_processor=parser_seq_processor,
                             prefix_attachment=prefix_attachment,
@@ -294,22 +294,99 @@ class Parser(nn.Module):
         logits_rels = torch.tanh(logits_rels / 7.5) * 7.5
 
         if self.training and self.gumbel_noise:
-            logits_rels = (
-                logits_rels +
+            logits_rels = (logits_rels +
                 -torch.log(
                     -torch.log(
                         torch.rand_like(logits_rels).clamp(min=1e-6)))
             )
         logits_rels = logits_rels.masked_fill(~visibility[..., None], -64)
-
         root_logits_rels = torch.diagonal(logits_rels, dim1=1, dim2=2).permute(0, 2, 1)
         p, p_root, entrpy = self.relaxed_structure.forward(
             head_dep_score=logits_rels,
             head_root_score=0 * root_logits_rels,
             mask=mask
         )
-        print(hinton.plot(p[0].sum(-1).detach().cpu().numpy(), max_val=1.))
         return p, p_root, h
+
+class NRILayer(nn.Module):
+    def __init__(self, hidden_dim, dropout=0.1, transform_edge=True):
+        super(NRILayer, self).__init__()
+        self.dropout = nn.Dropout(dropout)
+        self.in_e = nn.Linear(hidden_dim, hidden_dim)
+        self.out_e = nn.Linear(hidden_dim, hidden_dim)
+        self.activation_e = nn.Sequential(
+            nn.LayerNorm(hidden_dim),
+            nn.ELU(),
+            nn.Dropout(dropout)
+        )
+
+        if transform_edge:
+            self.e2e = nn.Linear(hidden_dim, hidden_dim)
+        else:
+            self.e2e = None
+
+        self.e2v = nn.Linear(hidden_dim, hidden_dim)
+        self.activation_v = nn.Sequential(
+            nn.LayerNorm(hidden_dim),
+            nn.ELU(),
+            nn.Dropout(dropout)
+        )
+
+    def forward(self, v, e=None, v_mask=None, e_mask=None):
+        diag_mask = torch.eye(v.size(1), dtype=torch.bool, device=v.device)
+        lin_e = self.in_e(v)[:, :, None] + self.out_e(v)[:, None, :]
+        if e is not None:
+            lin_e += self.e2e(e)
+        e = self.activation_e(lin_e) \
+            .masked_fill(diag_mask[None, ..., None], 0.)
+
+        if v_mask is not None:
+            v = v.masked_fill(v_mask[..., None], 0.)
+        if e_mask is not None:
+            e = e.masked_fill(e_mask[..., None], 0.)
+
+        v = v + self.activation_v(torch.sum(e, dim=1))
+        return v, e
+
+class NRIParser(nn.Module):
+    def __init__(self, input_size, num_layers=3,
+                 prefix_attachment=True,
+                 conv_size=3,
+                 dropout=0.2,
+                 parser_seq_processor='rnn',
+                 gumbel_noise=True):
+        super(NRIParser, self).__init__()
+        self.num_layers = num_layers
+        self.rel_types = 8
+
+        self.layers = nn.ModuleList([
+            NRILayer(hidden_dim=input_size)
+            for l in range(num_layers)
+        ])
+        self.relaxed_structure = KirchhoffNormalisation(
+            dropout=0.01,
+            smoothing_eps=0.,
+            plus_one=False, tril=prefix_attachment
+        )
+        self.parser_o = nn.Linear(input_size, self.rel_types)
+
+    def forward(self, X, mask):
+        lengths = mask.sum(1)
+        e_mask = mask[:, :, None] & mask[:, None, :]
+        v, e = X, None
+        for layer in self.layers:
+            v, e = layer.forward(v, e, v_mask=mask, e_mask=e_mask)
+
+        logits_rels = self.parser_o(e)
+        root_logits_rels = torch.diagonal(logits_rels, dim1=1, dim2=2).permute(0, 2, 1)
+        p, p_root, entrpy = self.relaxed_structure.forward(
+            head_dep_score=logits_rels,
+            head_root_score=0 * root_logits_rels,
+            mask=mask
+        )
+        # print("v", v.size())
+        # print("e", e.size())
+        return p, p_root, v
 
 
 if __name__ == "__main__":
@@ -320,7 +397,9 @@ if __name__ == "__main__":
     x[-4:, 2] = 0
     mask = x != 0
     print(mask.long())
-
-    gn = WeightedGNN(input_size=80, hidden_size=80, ntokens=20, padding_idx=0,
-                     snip_start_end=False)
+    gn = WeightedGNN(
+        input_size=80, hidden_size=80,
+        ntokens=20, padding_idx=0,
+        snip_start_end=False
+    )
     gn(x)

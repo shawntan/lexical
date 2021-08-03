@@ -46,3 +46,6 @@ class Encoder(nn.Module):
         final_state = torch.tan(final_state).permute(1, 0, 2)
         final_state = (final_state, torch.zeros_like(final_state))
         return (flattened_internal, final_state)
+
+
+
